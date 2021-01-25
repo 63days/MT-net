@@ -4,22 +4,18 @@ import torch.nn.functional as F
 import numpy as np
 import matplotlib.pyplot as plt
 from collections import OrderedDict
-from meta import MAML, T_net
-
+#from meta import MAML, T_net
+from meta2 import Meta
 
 def main(args):
-    maml = MAML()
-    tnet = T_net()
-    mtnet = T_net(mask=True)
+    maml = Meta(use_M=False, use_T=False)
+    tnet = Meta(use_M=False, use_T=True)
+    mtnet = Meta(use_M=True, use_T=True)
 
     models = {'maml': maml,
               'tnet': tnet,
               'mtnet': mtnet
               }
-
-    for k, v in models.items():
-        load_state = torch.load(f'checkpoint/{k}.ckpt', map_location='cpu')
-        v.net.load_state_dict(load_state['model_state_dict'])
 
     amplitude = np.random.uniform(0.1, 5.0, size=1)
     phase = np.random.uniform(0., np.pi, size=1)
@@ -27,38 +23,17 @@ def main(args):
     xs = np.linspace(-5, 5).reshape(-1, 1).astype('float32')
     ys = (amplitude * np.sin(xs + phase)).astype('float32')
 
-    k = 10
-    idx = np.random.choice(50, k, replace=False)
-    k_idx = idx[:k]
-    k_x, k_y = torch.from_numpy(xs[k_idx]), torch.from_numpy(ys[k_idx])
-    xs, ys = torch.from_numpy(xs), torch.from_numpy(ys)
+    pre_losses, post_losses = {}, {}
+    pre_preds, post_preds = {}, {}
 
-    pre_preds = dict(
-        (name, model.net(xs)) for name, model in models.items()
-    )
-
-    pre_losses = dict(
-        (name, F.mse_loss(pred, ys)) for name, pred in pre_preds.items()
-    )
-
-    step_grad = 1
-    post_preds = {}
-    post_losses = {}
     for name, model in models.items():
-        for i in range(step_grad):
-            pred = model.net(k_x)
-            loss = F.mse_loss(pred, k_y)
-            grad = torch.autograd.grad(loss, model.net.parameters())
-            fast_weights = OrderedDict(
-                (name, p - args.lr * g) for (name, p), g in zip(model.net.named_parameters(), grad)
-            )
-            pred = model.net(xs, fast_weights)
-            post_preds[name] = pred
-            post_losses[name] = F.mse_loss(pred, ys)
+        pre_pred, pre_loss, post_pred, post_loss = model.test(xs, ys)
+        pre_preds[name], pre_losses[name] = pre_pred, pre_loss
+        post_preds[name], post_losses[name] = post_pred, post_loss
 
     for (name, pre_loss), post_loss in zip(pre_losses.items(), post_losses.values()):
         print(f'{name} pre_loss:{pre_loss.item():.3f} | post_loss:{post_loss.item():.3f}')
-    xs, ys = xs.cpu().numpy(), ys.cpu().numpy()
+    #xs, ys = xs.cpu().numpy(), ys.cpu().numpy()
     # fig, ax = plt.subplots(1, 2)
     # ax[0].plot(xs, ys, label='GT')
     # ax[1].plot(xs, ys, label='GT')

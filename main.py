@@ -1,6 +1,6 @@
 import torch
 from sinusoid import Sinusoid
-from meta import MAML, T_net
+from meta2 import Meta
 from torch.utils.data import DataLoader
 import argparse
 from tqdm import tqdm
@@ -12,12 +12,11 @@ def main(args):
     print(device)
     print(args.method)
     if args.method == 'maml':
-        meta = MAML(inner_lr=args.inner_lr, outer_lr=args.outer_lr)
+        meta = Meta(use_M=False, use_T=False)
     elif args.method == 'tnet':
-        meta = T_net(inner_lr=args.inner_lr, outer_lr=args.outer_lr)
+        meta = Meta(use_M=False, use_T=True)
     elif args.method == 'mtnet':
-        meta = T_net(inner_lr=args.inner_lr, outer_lr=args.outer_lr,
-                     mask=True, temperature=1)
+        meta = Meta(use_M=True, use_T=True)
 
     meta.to(device)
     if not args.test:
@@ -37,7 +36,7 @@ def main(args):
                losses.append(loss)
 
         torch.save({
-            'model_state_dict': meta.net.state_dict(),
+            'weights': meta.weights,
             'losses': losses
         }, f'./checkpoint/{args.method}.ckpt')
 
